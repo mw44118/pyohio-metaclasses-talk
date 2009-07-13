@@ -1,62 +1,65 @@
-+++++++++++++++++++++++++++
+==========================+
 Clever Uses for Metaclasses
-+++++++++++++++++++++++++++
+==========================+
 
-Example: camel-casers and underscorers
-======================================
+Camel-casers and underscorers
+=============================
 
-Create underscore-named aliases for all methods in a class.
+Create aliases for all methods in a class.
 
 
-Example: use MCs to tweak subclasses
-====================================
+Use MCs to tweak subclasses
+===========================
 
-The class wants references to its instances::
+A class wants references to its instances
+=========================================
 
     >>> class Circle(object):
     ...     instances = []
     ...     def __init__(self):
     ...         self.instances.append(self)
-    ... 
-    >>> c1, c2 = Circle(), Circle()
-    >>> c1 in Circle.instances and c2 in Circle.instances
-    True
+    >>> c1 = Circle
+    >>> c1 in Circle.instances
 
-But the class doesn't want instances of subclasses::
+But not instances of subclasses
+===============================
 
     >>> class Ellipse(Circle):
     ...     pass
+    >>> e1 in Circle.instances # YUCK
+    True
     >>> id(Ellipse.instances) == id(Circle.instances)
     True
-    >>> e1 in Circle.instances
-    True
 
-Ghetto solution::
+Ghetto solution
+===============
 
     >>> class Ellipse(Circle):
     ...     instances = []
-    ... 
     >>> id(Ellipse.instances) == id(Circle.instances)
     False
 
-Do the work in a metaclass instead::
+Or use a metaclass
+==================
 
-    >>> class MCCircle(type):
+    >>> class MC(type):
     ...     def __init__(cls, name, bases, d):
     ...         super(MCCircle, cls).__init__(name, bases, d)
     ...         cls.instances = []
 
-Now redefine the classes::
+Now redefine the classes
+========================
 
     >>> class Circle(object):
-    ...     __metaclass__ = MCCircle
+    ...     __metaclass__ = MC
     ...     def __init__(self):
     ...         self.instances.append(self)
 
     >>> class Ellipse(Circle):
     ...     pass
 
-Here it is in action::
+In action
+=========
 
     >>> c1, c2 = Circle(), Circle()
     >>> c1 in Circle.instances
@@ -67,30 +70,48 @@ Here it is in action::
     >>> e1 in Circle.instances
     False
 
+Add a __contains__ method to MC
+===============================
 
+    >>> class MC(type):
+    ...         def __init__(cls, name, bases, d):
+    ...             super(MC, cls).__init__(name, bases, d)
+    ...         cls.instances = []
+    ... 
+    >>>     def __contains__(cls, item):
+    ...             return item in cls.instances
 
+Now membership is simpler
+=========================
 
+    >>> c1 in Circle
+    True
 
+Cookie cutters 
+==============
 
+Cookie cutters make cookies.  If you alter the cookie cutter, you alter the
+cookie that it makes.  
 
-Some boring theory
-==================
-
-Cookie cutter metaphor
-----------------------
-
-Cookie cutters make cookies.  If you alter the cookie cutter, you alter
-the cookie that it makes.  
-
-Big metal presses make cookie cutters.  An altered press makes an
-altered cookie cutter, which then makes an altered cookie.
-
+Big metal presses make cookie cutters.  An altered press makes an altered
+cookie cutter, which then makes an altered cookie.
 
 Subclasses vs instances
------------------------
+=======================
 
-A really, really simple ORM
-===========================
+    ========== ========== ========
+    metaclass  class      instance 
+    ========== ========== ========
+    type       object     ...
+    MC         Shape      s1
+    MC         Circle     c1
+    ========== ========== ========
+
+Shape has a different metaclass (MC) than object.  Shape's metaclass must be a
+subclass of object's metaclass.
+
+A really, really, really simple ORM
+===================================
 
 
 
@@ -98,15 +119,24 @@ A really, really simple ORM
 Metaclasses vs class decorators
 ===============================
 
-The camel-case vs underscore example would easily work as a class
-decorator.
+Class decorators also allow post-definition, pre-instantiation tweaking. The
+camel-case aliasing example is easy::
 
-The rocking chair example would not be easy because class decorators
-are not hereditary!
+    >>> from inspect import getmembers, ismethod
+    >>> from listing1 import mk_alias
+    >>> def aliasmaker(C):
+    ...     for name, value in getmembers(C, ismethod):
+    ...         setattr(C, mk_alias(name), value)
+    ...     return C
+    ...
+    >>> @aliasmaker
+    ... class C(object):
+    ...     def split_log(self, s):
+    ...         return s.split(' ')
+    ...
+    >>> c1 = C()
+    >>> id(c1.split_log) == id(c1.splitLog)
+    True
 
-
-Something much simpler and almost as powerful: prototypes
-=========================================================
-
-
-
+But class decorators are not hereditary, so you won't get any aliases on
+subclasses.
