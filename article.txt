@@ -1,0 +1,920 @@
+=t=Clever Uses for Metaclasses=t=
+
+=b=Matt Wilson=b=
+
+=d=
+
+Metaclasses have an undeserved reputation of being confusing and
+difficult.  While they might be a little exotic, metaclasses can be used
+to eliminate redundant code and solve certain problems in an elegant
+manner.
+
+=d=
+
+
+=h=Classes, Instances, and Types=h=
+
+Just about every python programmer creates classes every day.  In the
+following code:
+
+<code>
+>>> class C(object):
+...     pass
+...
+>>> o1 = C()
+>>> o2 = C()
+
+</code>
+
+C is a class and o1 and o2 are instances of C.  In other words, the type
+of o1 and o2 is C.
+
+The type function returns a reference to the type of the object:
+
+<code>
+>>> type(o1) == C
+True
+
+</code>
+
+In fact, it is possible to make new instances of class C like this:
+
+<code>
+>>> o3 = type(o1)()
+>>> assert type(o3) == type(o1)
+
+</code>
+
+Just like how a class is the type of an object, a metaclass is the type
+of the class of an object.  In other words, a metaclass is the type of
+the type of an object.
+
+<code>
+>>> type(type(o1)) # This shows the metaclass of o1.
+<type 'type'>
+
+</code>
+
+So what?  Why learn how to use metaclasses?
+
+Metaclasses allow you to monkey with your class after you define your
+class and before you instantiate your class.
+
+{{callout
+
+ Metaclasses allow you to monkey with your class after you define your class and before you instantiate your class.
+}}
+
+Guido recommends the book //Putting Metaclasses to Work// as the best
+tutorial to learn about metaclasses.  While that book is out of print,
+Amazon has this text from the front flap:
+
+    If one thinks of objects as cookies, then classes are analogous to
+    cookie cutters. Cookie cutters are templates that are used to make and
+    determine the properties of cookies; classes make and determine the
+    properties of objects. But how are cookie cutters themselves made? Let
+    us say that they are pressed from sheet metal using a cookie cutter
+    press (a piece of heavy machinery). So, if a cookie cutter press is used
+    to make cookie cutters, what is used to make classes? The answer is a
+    metaclass. Although a cookie cutter press does not directly make cookies
+    (because it makes cookie cutters), it does determine properties of
+    cookies. In a very similar way, a metaclass can determine the properties
+    of objects, because it builds a class that makes objects. Our solution
+    for greater reusability is based on the use of metaclasses to isolate
+    and implement object properties.
+
+Crystal clear now, right?  If not, then don't worry. The next section
+walks through a very simple use.
+
+=h=Peace between camelcasers and underscorers=h=
+
+Imagine for a second that programmers are petty misanthropes that scream
+themselves hoarse over unimportant details.  Pretend that a perfectly
+decent code review screeches to a halt when a fight breaks out over
+camel-case vs underscore-based naming conventions.
+
+This is hard to imagine, but play along, because it provides an excuse
+for a really simple use for metaclasses.
+
+So, in this scenario, everyone agrees that a new method must be added to
+a class, and the method should split a log entry into a tuple of
+strings.
+
+The fight breaks out over the naming of that method.  These are the two
+contenders:
+
+- split_log (underscore convention)
+- splitLog (camel-case convention)
+
+More generally, both camps want to rename every function to comply with
+one convention.
+
+It is possible to use a metaclass here to give both parties what they
+want. One developer can define a function and name it in using one
+convention, and another developer can call that function using a
+different convention.
+
+Here's an example usage:
+
+<code>
+>>> from listing1 import peace_between_factions
+>>> class C(object):
+...     "This class has aliases for its methods"
+...     __metaclass__ = peace_between_factions
+...     def splitLog(self, s):
+...         return s.split(' ')
+...     def check_for_errors(self, logparts):
+...         if logparts[0] == 'ERROR':
+...             raise Exception("found an error! %s"
+...                             % logparts)
+...
+cls is <class 'C'>
+name is C
+bases are <type 'object'>
+sorted(d.keys()) are ['__doc__', '__metaclass__', '__module__', 'check_for_errors', 'splitLog']
+>>> c1 = C()
+>>> c1.split_log('a b c')
+['a', 'b', 'c']
+>>> c1 = C()
+>>> c1.splitLog('a b c')
+['a', 'b', 'c']
+>>> c1.checkForErrors(c1.split_log('a b c'))
+>>> id(c1.split_log) == id(c1.splitLog)
+True
+
+</code>
+
+The peace_between_factions metaclass makes it possible for both camps to
+call the function according to their own preferred convention.  If one
+camp defines the function in their camel-case syntax, the metaclass
+makes sure that an underscore-based alias exists.
+
+Note that the class C definition only defines splitLog (in camel-case
+convention), but we can call that method as splitLog or split_log.
+Furthermore, using the id function, it is clear that the functions
+aren't copies, but one function with two names.  Meanwhile,
+check_for_errors is defined using underscores, but is callable with the
+camel-cased version.
+
+Take a look at the code in Listing 1.  The functions cc2us and us2cc are
+straightforward string converters.  I wrote mk_alias so that I can feed
+in any string and be confident that I'll get the opposite convention
+out.
+
+The metaclass peace_between_factions is what does the interesting work.
+I print out the parameters to the __init__ method so that the next part
+will be more obvious.  The most important thing to notice is the
+contents of the dictionary d.
+
+The dictionary d is what contains the definition of the class C, where
+the keys are the attribute names of the class and the values are the
+actual attributes.
+
+So the rest is straightforward.  I iterate through each attribute name
+in the class, and fetch the attribute with that name.  I don't want to
+create aliases for attributes like the class docstring attribute (which
+is __doc__, by the way), so I test if the attribute is a method.  Then I
+use setattr to create the alias.  See the Doctests sidebar for an
+explanation for why I sorted the d.keys() call.
+
+=h=Subclassing and metaclassing=h=
+
+I found the interaction between subclasses and metaclasses difficult to
+comprehend at first.  I think this is because I'm often sloppy about
+using specific terms when describing relationships.  Here's a simple
+example:
+
+<code>
+>>> class A(object):
+...     pass
+...
+>>> class B(A):
+...     def f(self):
+...         return True
+...
+>>> b1 = B()
+
+</code>
+
+In the code above, I might carelessly say that b1 is a subclass of A.
+That's not accurate -- b1 is an instance of B, and B is a subclass of A.
+Incidentally, b1 is also an instance of A.  But b1 is not a subclass of
+A.  In fact, python makes it trivial to verify these statements:
+
+<code>
+>>> issubclass(b1, A)
+Traceback (most recent call last):
+    ...
+TypeError: issubclass() arg 1 must be a class
+>>> isinstance(b1, A)
+True
+>>> isinstance(B, type)
+True
+>>> isinstance(b1, type)
+False
+>>> issubclass(B, A)
+True
+
+</code>
+
+Notice that B is an instance of type just like how b1 is an instance of B.
+
+I think about metaclasses and subclasses as blocks in a grid.  Figure 1
+shows how I would map out the relationship between type, object, A, B,
+and b1.
+
+Movement from left to right traces the instantation process.  Movement
+from top to bottom traces the inheritance relationship.
+
+So, type gets instantiated into the object class. The A class descends
+from the object class.  Class B descends from class A.  A, B, and object
+all share the same metaclass: type.  Finally, b1 is an instance of B,
+and indirectly, b1 is an instance of A and object too.
+
+Keep in mind that any subclass automatically inherits the metaclass of
+its parent.  A subclass can have a different metaclass as long as the
+different metaclass is a subclass of the parent's metaclass.
+
+Here's a concrete example showing how metaclasses pass along with other
+inherited traits:
+
+<code>
+>>> class MC(type):
+...     def __new__(cls, name, bases, attrs):
+...         print ("returning an instance of %s."
+...                % cls)
+...         return super(MC, cls).__new__(cls,
+...                      name, bases, attrs)
+>>> class C(B):
+...     __metaclass__ = MC
+...
+returning an instance of <class 'MC'>.
+>>> c1 = C()
+>>> isinstance(c1, A)
+True
+>>> type(type(c1))
+<class 'MC'>
+>>> issubclass(type(type(c1)), type)
+True
+
+</code>
+
+However, this code below fails because I don't respect the inheritance
+requirements on metaclasses:
+
+<code>
+>>> class MC2(type):
+...     def __new__(cls, name, bases, d):
+...         return super(MC2, cls).__new__(
+...             cls, name, bases, d)
+...
+>>> class D(C):
+...     __metaclass__ = MC2
+...
+Traceback (most recent call last):
+    ...
+TypeError: Error when calling the metaclass bases
+    metaclass conflict: the metaclass of a derived class must be a (non-strict) subclass of the metaclasses of all its bases
+
+</code>
+
+The grid in figure two is updated below to include C and D.
+
+The MC2 metaclass would have to descend from MC in order for D to
+descend from C.
+
+=h=Use metaclasses to tweak subclasses=h=
+
+Subclasses share the same attribute with the parent class.  In some
+cases, this can be frustrating.
+
+Imagine if you need a rocking chair class and an easy chair class, both
+descending from a chair class.  Also, you want each instance of these
+subclasses to have an id attribute that starts with 1 and increments up
+with each instantiation.
+
+So, the first rocking chair instance you make should have an id of 1 and
+the second rocking chair instance should have an id of 2.  The first
+easy chair should also have an id of 1 and the second easy chair should
+have an id of 2.
+
+The code below will not give you what you need:
+
+<code>
+>>> from itertools import count
+>>> class Chair1(object):
+...     id_ticker = count(1)
+...     def __init__(self):
+...         self.id = self.id_ticker.next()
+...
+>>> class RockingChair1(Chair1):
+...     pass
+...
+>>> class EasyChair1(Chair1):
+...     pass
+...
+
+</code>
+
+Here's what happens when we make a bunch of instances.
+
+<code>
+>>> (RockingChair1().id, RockingChair1().id,
+...  EasyChair1().id, EasyChair1().id,
+...  RockingChair1().id)
+(1, 2, 3, 4, 5)
+
+</code>
+
+The rocking chair instances increment the easy chair instances, which is
+not what we want.  The problem comes from the fact that The id_ticker
+attribute of Chair1 is shared across each subclass:
+
+<code>
+>>> (id(Chair1.id_ticker)
+...  == id(RockingChair1.id_ticker)
+...  == id(EasyChair1.id_ticker))
+True
+
+</code>
+
+There's a straightforward solution to this problem.  Have each subclass
+create its own id_ticker, like this:
+
+<code>
+>>> class Chair2(object):
+...     def __init__(self):
+...         self.id = self.id_ticker.next()
+...
+>>> class RockingChair2(Chair2):
+...     id_ticker = count(1) # Create this separately for each subclass.
+...
+>>> class EasyChair2(Chair2):
+...     id_ticker = count(1) # Create this separately for each subclass.
+...
+
+</code>
+
+The approach above gets the job done at the cost of some redundancy in
+the subclass definitions.
+
+<code>
+>>> (RockingChair2().id, RockingChair2().id, 
+...  EasyChair2().id, EasyChair2().id, 
+...  RockingChair2().id)
+(1, 2, 1, 2, 3)
+
+</code>
+
+We can verify that the id_ticker attribute of each subclass is no longer
+shared:
+
+<code>
+>>> id(RockingChair2.id_ticker) \
+... == id(EasyChair2.id_ticker)
+False
+
+</code>
+
+It is also possible to use a metaclass to make that id_ticker.  This
+approach avoids the the need to define it over and over in each
+subclass.
+
+<code>
+>>> class McChair(type):
+...     def __init__(cls, name, bases, d):
+...         super(McChair, cls).__init__(name, bases, d)
+...         cls.id_ticker = count(1)
+...
+>>> class Chair3(object):
+...     __metaclass__ = McChair
+...     def __init__(self):
+...         self.id = self.id_ticker.next()
+...
+>>> class RockingChair3(Chair3):
+...     pass
+...
+>>> class EasyChair3(Chair3):
+...     pass
+
+</code>
+
+This approach gives us what we want:
+
+<code>
+>>> (RockingChair3().id, RockingChair3().id, EasyChair3().id,
+...  EasyChair3().id, RockingChair3().id)
+(1, 2, 1, 2, 3)
+
+</code>
+
+=h=__init__ versus __new__=h=
+
+It is possible to define either of these (or both) in the metaclass.
+They have different roles.   The __new__ method builds the instance,
+and the __init__ method dresses it up.
+
+The code below shows one way to implement the peace_between_factions
+using the __new__  method rather than __init__:
+
+<code>
+>>> import types
+>>> from listing1 import mk_alias
+>>> class peace_between_factions_v2(type):
+...     def __new__(mcl, name, bases, d):
+...         cls = super(peace_between_factions_v2,
+...                   mcl).__new__(mcl, name, bases, d)
+...         for attrname in d:
+...             attr = d[attrname]
+...             if type(attr) == types.FunctionType:
+...                 setattr(cls, mk_alias(attrname), attr)
+...         return cls 
+>>> class D(object):
+...    __metaclass__ = peace_between_factions_v2
+...    def logParse(self, s):
+...        return s.split(' ')
+>>> d1 = D()
+>>> id(d1.log_parse) == id(d1.logParse)
+True
+
+</code>
+
+Inside that code, the variable cls holds the instantiated metaclass; in
+other words, the class.  Meanwhile, mcl refers to the metaclass
+peace_between_factions_v2.
+
+Just like in the original approach, I iterate through the keys in d, and
+then for each method, I use setattr to attach a new attribute to the
+class.
+
+I find working with __init__ simpler than working with __new__.  The
+__init__ method receives an already-allocated instance of the class, and
+only needs to attach whatever attributes are appropriate.  Nothing needs
+to be returned.
+
+It is obvious to look at an __init__ method and recognize all the code
+responsible for initializing the instance.  Nothing else is likely to be
+in the method.
+
+Meanwhile, in the __new__ method, the "ceremonial" code related to
+creating and returning the class is intertwined with the interesting
+material.
+
+Using __new__ rather than __init__ is most useful when you are
+interested in controlling whether to make a class at all, or you might
+want to return a different class in place of the original.
+
+Keep in mind that the __new__ method in a metaclass controls  the
+instantiation of the metaclass into a class.  By defining a __new__
+method on a metaclass, you can prevent a class from being defined or
+replace it with another class.
+
+The code in listing two defines a metaclass that verifies an interface
+has been defined. Classes that don't define all methods required by the
+interface are replaced by Null classes:
+
+<code>
+>>> from listing2 import InterfaceChecker
+>>> rocketship = ['launch']
+>>> class Soyuz(object):
+...     __metaclass__ = InterfaceChecker
+...     interface = rocketship
+...
+>>> s1 = Soyuz()
+>>> type(s1)
+<class 'listing2.Null'>
+
+</code>
+
+Since Soyuz didn't have a launch method defined, the Soyuz class is
+really the Null class.
+
+It wouldn't be possible to do this kind of class substitution with the
+__init__ method in a metaclass because the class already exists.  We
+could raise an exception, but that would obviously interrupt the flow of
+the program.
+
+This may seem a little baroque, but Null classes like these are useful
+when people are working on projects in parallel.  Other code can behave
+as if Soyuz is already defined, and once the Soyuz class is fleshed out,
+the metaclass will return the correct class.
+
+=h=Metaclasses in the wild -- the Django ORM=h=
+
+The Django web framework includes an object-relational mapper that uses
+metaclasses.  The metaclass handles a lot of post-processing and makes
+it easy to define classes using a sparse, declarative style:
+
+<code>
+$ cat scratch/models.py
+from django.db import models
+
+class Employee(models.Model):
+    login = models.TextField()
+    display_name = models.TextField()
+
+class Department(models.Model):
+    name = models.TextField()
+    employees = models.ManyToManyField(Employee)
+
+</code>
+
+The employees attribute on Department makes it possible to discover all
+the employees that belong to a particular department.  The ipython
+session below shows how useful this is:
+
+<code>
+$ python manage.py shell 
+In [1]: from scratch.models import Employee, \
+...     Department
+In [2]: homer = Employee(login="hs",
+...:                     display_name="H. Simpson")
+In [3]: sector7G = Department(name="Sector 7G")
+In [4]: homer.save()
+In [5]: sector7G.save()
+In [6]: sector7G.employees.all()
+Out[6]: []
+In [7]: sector7G.employees.add(homer)
+In [8]: sector7G.employees.all()
+Out[8]: [<Employee: Employee object>]
+In [9]: _8[0].display_name
+Out[9]: u'H. Simpson'
+</code>
+
+I should mention that the Django shell is a very helpful feature.  It
+starts an interpreter, creates a database connection, and sets up the
+system path to find all the modules in your project. If you have ipython
+installed, it will start.
+
+In the session above, I created an employee and a department, put the
+employee in the department, then queried the department for all
+employees.
+
+Behind the scenes, the Django data model code inserts a row in my
+Employee table, inserts a row in my Department table, and then inserts a
+row in the EmployeeDepartment table that associates the two other
+tables. Then on line 8, the data model runs a select query that joins
+the Employee table with the EmployeeDepartment table and filters the
+results to employees linked with one particular department.
+
+This is a very useful abstraction.  It may not be obvious at first, but
+some sophisticated code is required in order to make this happen.
+Notice that the employees attribute on Department is an instance of the
+ManyToManyField class.
+
+Obviously, a class has references to all its attributes.  However, the
+relationship does not flow the other way.  You can not ask an attribute
+to provide the class that it belongs to.  In the sample code below, d
+has no knowledge that it is an attribute within class C:
+
+<code>
+>>> class C(object):
+...     d = {}
+
+</code>
+
+So, for the same reason, the employees attribute inside the Department
+class has no way to know it is connected to that Department class.  When
+I call Sector76.employees.all, the employees object doesn't have access
+to the Department object Sector76.
+
+However, the query sent to the database looks similar to this:
+
+<code>
+SELECT EMPLOYEE.*
+FROM EMPLOYEE
+LEFT OUTER JOIN DEPARTMENT_EMPLOYEES
+ON EMPLOYEE.ID = DEPARMENT_EMPLOYEES.EMPLOYEE_ID
+WHERE DEPARTMENT_EMPLOYEES.DEPARTMENT_ID = 3;
+</code>
+
+The actual query requests columns by name and uses some aliases.  I've
+prettied up the actual django query to avoid these details which aren't
+relevant.
+
+Anyhow, this query knows to limit the result set to just the employees
+in the department with ID 3.  That information is stored in the
+Department object, not in the employees attribute.  So, how does the
+employees attribute know what Department instance it is attached to?
+
+The answer requires about 500 lines of code, so I'll summarize what is
+going on.
+
+1. The Employee and Department class both descend from django.db.models.Model, which has a metaclass named ModelBase.
+
+2. The models.ManyToManyField class has a method called "contribute_to_class".
+
+3. When Department is instantiated, the ModelBase __new__ method executes.  It iterates through all the attributes of Department.  The metaclass checks each attribute of Department and checks each attribute for the existence of a contribute_to_class method.
+
+4. When it finds contribute_to_class, it calls that method and passes in
+a pointer to Department class and the name 'employees'.  So in this
+case, the employees attribute on the Department class has a pointer back
+to the Department class named 'employees'.
+
+So, now inside the employees object, it knows that what class
+(Department) it belongs to.
+
+Incidentally, something very similar exists in the SQLObject ORM framework.
+
+=h=A vastly simpler ORM=h=
+
+Just in case that high-level explanation was insufficient, the code in
+listing 3 implements this technique in a much simpler fashion.  I want
+to show the idea more than build robust code here.  I'm focusing mostly
+on the features that take advantage of metaclasses.  Instead of actually
+using a database, Listing 3 only returns strings that could be fed into
+a database.
+
+First we'll model these relationships:
+
+- Each department has many employees.
+- Each employee belongs to exactly one department.
+
+This code does the job:
+
+<code>
+>>> from listing3 import *
+>>> class Employee(CrudeTable):
+...
+...     def __init__(self, name, department):
+...         super(Employee, self).__init__()
+...         self.name = name
+...         self.department = department
+...
+>>> class Department(CrudeTable):
+...
+...     def __init__(self, name):
+...         super(Department, self).__init__()
+...         self.name = name
+...
+...     employees = OneToMany(Employee)
+Assigning the colname to department on attribute 
+employees of cls Department
+
+</code>
+
+That last line is from the print statement on line 56 of listing 3.  The
+metaclass MC discovers the employees attribute on the class Department.
+Since employees is an instance of the OneToMany class, employees has a
+colname attribute, which is initially set to None.  The metaclass MC
+then sets employees.colname to 'department'.  
+
+Here's an example usage of the one-to-many relationship between employees and departments:
+
+<code>
+>>> produce = Department("Produce")
+>>> matt = Employee("Matt", produce)
+>>> produce._id
+1
+>>> produce.employees
+'select * from employee where department_id = 1'
+>>> bakery = Department("Bakery")
+>>> lindsey = Employee("Lindsey", bakery)
+>>> charlie = Employee("Charlie", bakery)
+>>> bakery._id
+2
+>>> bakery.employees
+'select * from employee where department_id = 2'
+
+</code>
+
+There are three pieces of information required to find all
+employees in a deparment:
+
+- The table to query (employee)
+- the column name to test (department_id)
+- the value to test for (1 in this case).
+
+The code for the query method interpolates these values into a string
+and then returns the string.  
+
+It is pretty clear how employees gets the table to query.  When I
+created the employees attribute on the Department class, I passed in the
+Employee table as a parameter, and the __init__ method for OneToMany
+keeps a reference to it.
+
+The column name, department_id, is slightly trickier, but is handled by
+the metaclass MC, described earlier. 
+
+Finally, the last piece of information that the query needs is the id of
+this particular department instance.  Note that on line 60 of listing 3,
+the metaclass MC makes a property out of the query method on the
+original attribute.
+
+So, after the metaclass has finished processing the class,
+Department.employees isn't an instance of OneToMany any longer.  It is
+now a property that will call OneToMany.query when accessed.
+
+By making employees.query into a property named employees, I'm taking advantage of the fact that employees will get called with self as the first parameter.
+
+This except below shows how I could use the OneToMany class without resorting to this metaclass and property tomfoolery:
+
+<code>
+>>> # This is just like how we define the attribute.
+>>> otm = OneToMany(Employee)
+>>> otm.table.sqltablename
+'employee'
+>>> # This is what the metaclass does.
+>>> otm.colname = 'department'
+>>> bakery._id
+2
+>>> # the property passes in bakery just like this.
+>>> print otm.query(bakery)
+select * from employee where department_id = 2
+
+</code>
+
+So, the real point of using the metaclass all the procedural work is
+taken out of the Employee and Department class.  I just specify the
+nature of the relationship, and everything is automatically set up
+behind the scenes.
+
+Another slightly more complex example is a many-to-many relationship
+like this:
+
+- Each shift requires many employees.
+- Each employee works many different shifts.
+
+Here's an example usage of the many-to-many relationship between
+employees and the shifts that they are assigned to:
+
+<code>
+>>> class Shift(CrudeTable):
+...
+...     def __init__(self, name):
+...         super(Shift, self).__init__()
+...         self.name = name
+...
+...     employees = ManyToMany(Employee)
+...
+Assigning the colname to shift on attribute 
+employees of cls Shift
+>>> wednesday_night = Shift("Wednesday Night")
+>>> print wednesday_night.employees
+select * from employee, employee_shift
+where employee.id = employee_shift.employee_id
+and employee_shift.shift_id = 1
+
+</code>
+
+The ManyToMany class needs the same colname information to form its
+query, but it also needs the name of the table joining the two other
+tables.  The MC metaclass watches for attributes with a jointable
+attribute, and it fills that in when it finds it.
+
+In the end, we get behavior a lot like the OneToMany class, except
+extended to include another table.
+
+There's a massive list of improvements required before this code is production-ready, however, I hope it is instructive, which was the real point.
+
+=h=Class Decorators in Python 2.6=h=
+
+Metaclasses are the best tool right now for processing a class after
+definition, but they will face some competition in Python 2.6.  The
+decorator syntax will be extended so that decorators can apply to
+classes instead of just to functions and methods.
+
+Going back to the first example of this article, in python 2.6, I can
+use a class decorator to add aliases for every method in a function,
+like this:
+
+>>> from inspect import getmembers, ismethod
+>>> from listing1 import mk_alias
+>>> def aliasmaker(C):
+...     for name, value in getmembers(C, ismethod):
+...         setattr(C, mk_alias(name), value)
+...     return C
+... 
+>>> @aliasmaker
+... class C(object):
+...     def split_log(self, s):
+...         return s.split(' ')
+... 
+>>> c1 = C()
+>>> c1.split_log('a b')
+['a', 'b']
+>>> c1.splitLog('a b')
+['a', 'b']
+>>> id(c1.split_log) == id(c1.splitLog)
+True
+
+In fact, it is possible to run a class through a post-processing
+function already, as long as you avoid the @-symbol syntax.  In python
+2.5, this is perfectly legal, and has the same outcome:
+
+>>> C = aliasmaker(C)
+
+Class decorators may replace simple uses of metaclasses like the one
+above.  Additionally, multiple decorators can be applied to a single
+class.
+
+However, it is important to note that a decorator applied to a parent
+class won't also be applied to a subclass.  If I subclass C from above,
+the new methods in D won't have aliases created automatically:
+
+>>> class D(C):
+...     def new_method(self):
+...         return 1
+... 
+>>> d1 = D()
+>>> id(d1.split_log) == id(d1.splitLog)
+True
+>>> hasattr(d1, 'new_method')
+True
+>>> hasattr(d1, 'newMethod')
+False
+
+The effect of decorating C persists into the subclass D.  However, we
+won't automatically decorate D.
+
+=h=Cleverness Reconsidered=h=
+
+There's a popular quote about metaclasses that shows up frequently while
+searching for metaclass tutorials:
+
+    Metaclasses are deeper magic than 99% of users should ever worry
+    about. If you wonder whether you need them, you don't (the
+    people who actually need them know with certainty that they need
+    them, and don't need an explanation about why). -- Python Guru
+    Tim Peters
+
+Moreover, David Mertz and Michele Simionato wrote a three-part series on
+metaclasses called //Metaclass programming in Python//, and began their
+final article with these remarks:
+
+    Too much cleverness in programming makes designs more complicated,
+    code more fragile, learning curves steeper, and worst of all, it
+    makes debugging harder. ...  We have nothing against cleverness in
+    experimental projects and learning exercises. Our gripe is with
+    cleverness in production frameworks that we are forced to cope with
+    as users.
+
+These are all words to live by.
+
+However, there is also a danger in never going out on a limb and never
+trying anything new.  The way I see it, staying away from scary ideas
+because you don't consider yourself a guru is a good way to guarantee
+you will never become a guru.
+
+So, my humble advice as a non-guru is that you *do* use metaclasses
+gratuitiously *in your experimental sandbox*.  One of the great things
+about programming is the low cost of experimentation.  We're not trying
+to invent a new kind of dynamite or learn how to transplant organs.  Go
+nuts.  Use metaclasses until they are downright boring.
+
+Then go back and reread The Zen of Python (also written by Tim Peters).
+Simple is better than complex and readability counts, so pause a moment
+before you reach for the fanciest tool in the box.
+
+=h=Doctests (sidebar)=h=
+
+I wrote this article using a text editor and I kept each section in a
+separate text file.  I used resStructuredText to add markup like lists,
+links, and section titles.
+
+Thanks to doctest.testfile, I didn't need to copy and paste each code
+sample from the text files into an interpreter to verify it.  This is
+how I checked the code excerpts in the introducton section of this
+article:
+
+<code>
+>>> import doctest
+>>> doctest.testfile('../intro.rst', None)
+(0, 7)
+
+</code>
+
+That doctest.testfile function scans my intro.rst file and then executes
+the code and verifies that the results match the expected output.
+
+Back in Listing 1, I sort the keys of the dictionary d before I print
+them to guarantee that the code sample always returns the exact same
+string.  Remember that when a dictionaries returns the keys, the order
+is not predictable.  For example, the docstring in the function f below
+is risky because the returned dictionary may order the keys differently:
+
+<code>
+>>> def f(x, y):
+...    """
+...    >>> f(1, 2)
+...    {'y': 2, 'x': 1}
+...    """
+...    return dict(x=x, y=y)
+
+</code>
+
+It would be safer to write a docstring like this instead:
+
+<code>
+>>> def f(x, y):
+...    """
+...    >>> type(f(1, 2)) == type({})
+...    True
+...    >>> f(1, 2)['x'] == 1
+...    True
+...    >>> f(1, 2)['y'] == 2
+...    """
+...    return dict(x=x, y=y)
+
+</code>
+
