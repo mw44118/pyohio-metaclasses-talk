@@ -2,18 +2,21 @@
 Clever Uses for Metaclasses
 ==========================+
 
+**slides are for MBAs**
+
 Really simple metaclass example
 ===============================
 
-Define methods using camelCase like splitLog, but call them with aliases like
-split_log.
+Programmers fight about camelCase (boo!) versus under_score (yay!)
+naming conventions.
 
+So I made a metaclass that creates aliases for all methods in a class.
 
 In use
 ======
 
+>>> from listing1 import peace_between_factions
 >>> class C(object):                                                                        
-...     "This class has aliases for its methods"                                            
 ...     __metaclass__ = peace_between_factions                                              
 ...     def splitLog(self, s):                                                              
 ...         return s.split(' ')                                                             
@@ -39,15 +42,23 @@ The code
             print "bases are %s" % bases
             print "sorted(d.keys()) are %s" % sorted(d.keys())
 
-            # Iterate through each attribute in the class.
-
             for attrname in d:
-
                 attr = getattr(cls, attrname)
-
                 # For methods, create an alias.
                 if type(attr) == types.MethodType:
                     setattr(cls, mk_alias(attrname), attr)
+
+
+Stuff to notice
+===============
+
+*   The print statements show up immediately after the class is defined.
+    In other words,  the metaclass __init__ fires once I finished
+    defining C.
+
+*   The d parameter maps method names to methods.  The aliasing trick is
+simple.  I just conver
+
 
 Another simple example
 =======================
@@ -62,14 +73,16 @@ This is half right
     ...     instances = []
     ...     def __init__(self):
     ...         self.instances.append(self)
-    >>> c1 = Circle
+    >>> c1 = Circle()
     >>> c1 in Circle.instances
+    True
 
 But is too greedy
 =================
 
     >>> class Ellipse(Circle):
     ...     pass
+    >>> e1 = Ellipse()
     >>> e1 in Circle.instances # YUCK
     True
     >>> id(Ellipse.instances) == id(Circle.instances)
@@ -156,6 +169,7 @@ Subclasses vs instances
     type       object     ...
     MC         Shape      s1
     MC         Circle     c1
+    MC2        Ellipsis
     ========== ========== ========
 
 Shape has a different metaclass (MC) than object.  Shape's metaclass must be a
