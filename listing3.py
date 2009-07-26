@@ -1,4 +1,4 @@
-# listing3.py
+# listing2.py
 
 """
 Vastly simplified example of ORM metaclass trickery.
@@ -34,8 +34,7 @@ class OneToMany(object):
     def query(self, x):
 
         """
-        Returns a string like 
-        "select * from employee where department_id = 99"
+        Returns a string like "select * from employee where department_id = 99"
         x must have an _id attribute.
         """
 
@@ -53,30 +52,15 @@ class MC(type):
         for attrname, attr in d.iteritems():
 
             if hasattr(attr, 'colname'):
+                print ("Assigning colname to %s on attribute %s of cls %s" 
+                       % (cls.sqltablename, attrname, name))
                 attr.colname = cls.sqltablename
-                setattr(cls, attrname, property(attr.query))
 
             if hasattr(attr, 'jointable'):
-                attr.jointable = ("%s_%s" 
-                    % (attr.table.sqltablename, cls.sqltablename))
+                attr.jointable = "%s_%s" % (attr.table.sqltablename, cls.sqltablename)
             
 class CrudeTable(object):
     __metaclass__ = MC
 
     def __init__(self):
         self._id = self.id_ticker.next()
-
-class Employee(CrudeTable):
-
-    def __init__(self, name, department):
-        super(Employee, self).__init__()
-        self.name = name 
-        self.department = department
-    
-class Department(CrudeTable):
-    
-    def __init__(self, name):
-        super(Department, self).__init__()
-        self.name = name
-        
-    employees = OneToMany(Employee)

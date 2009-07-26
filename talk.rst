@@ -7,34 +7,49 @@ Clever Uses for Metaclasses
 Really simple metaclass example
 ===============================
 
-Programmers fight about camelCase (boo!) versus under_score (yay!)
-naming conventions.
+Programmers fight about camelCase (boo!) versus under_score
+(yay!) naming conventions.
 
-So I made a metaclass that creates aliases for all methods in a class.
+So I made a metaclass that creates aliases from each
+convention to the other.
 
 In use
 ======
 
->>> from listing1 import peace_between_factions
->>> class C(object):                                                                        
-...     __metaclass__ = peace_between_factions                                              
-...     def splitLog(self, s):                                                              
-...         return s.split(' ')                                                             
-...                                                                                         
-cls is <class 'C'>                                                                          
-name is C                                                                                   
-bases are <type 'object'>                                                                   
-sorted(d.keys()) are ['__doc__', '__metaclass__', '__module__', 'splitLog'] 
->>> id(c1.split_log) == id(c1.splitLog)
-True
+::
+
+    >>> from listing1 import peace_between_factions
+    >>> class C(object):
+    ...     __metaclass__ = peace_between_factions
+    ...     def splitLog(self, s):
+    ...         return s.split(' ')
+    ...
+    cls is <class 'C'>
+    name is C
+    bases are <type 'object'>
+    >>> c1 = C()
+    >>> id(c1.split_log) == id(c1.splitLog)
+    True
 
 The code
 ========
 
+First I wrote a silly function::
+
+    >>> from listing1 import mk_alias
+    >>> mk_alias('under_score')
+    'underScore'
+    >>> mk_alias('camelCase')
+    'camel_case'
+
+Then I wrote this metaclass::
+
     class peace_between_factions(type):
 
         def __init__(cls, name, bases, d):
-            super(peace_between_factions, cls).__init__(name, bases, d)
+
+            super(peace_between_factions, cls)\
+            .__init__(name, bases, d)
 
             # Some instructive print statements
             print "cls is %s" % cls
@@ -48,26 +63,26 @@ The code
                 if type(attr) == types.MethodType:
                     setattr(cls, mk_alias(attrname), attr)
 
-
 Stuff to notice
 ===============
 
-*   The print statements show up immediately after the class is defined.
-    In other words,  the metaclass __init__ fires once I finished
-    defining C.
+*   The print statements show up immediately after the class
+    is defined.  In other words,  the metaclass __init__
+    fires once I finished defining C.
 
-*   The d parameter maps method names to methods.  The aliasing trick is
-simple.  I just conver
+*   The d parameter holds everything in the class definition.
 
 
 Another simple example
-=======================
+======================
 
-A class wants references to its instances, but not instances of its
-subclasses.
+A class wants references to its instances, but not instances
+of its subclasses.
 
 This is half right
 ==================
+
+::
 
     >>> class Circle(object):
     ...     instances = []
@@ -80,6 +95,8 @@ This is half right
 But is too greedy
 =================
 
+::
+
     >>> class Ellipse(Circle):
     ...     pass
     >>> e1 = Ellipse()
@@ -91,21 +108,32 @@ But is too greedy
 Ghetto solution
 ===============
 
+::
+
     >>> class Ellipse(Circle):
     ...     instances = []
     >>> id(Ellipse.instances) == id(Circle.instances)
     False
 
+*   I'll probably forget to manually add it.
+*   It sure is repetitive.
+
+
 Or use a metaclass
 ==================
 
+::
+
     >>> class MC(type):
     ...     def __init__(cls, name, bases, d):
-    ...         super(MCCircle, cls).__init__(name, bases, d)
+    ...         super(MC, cls).__init__(name, bases, d)
     ...         cls.instances = []
+
 
 Now redefine the classes
 ========================
+
+::
 
     >>> class Circle(object):
     ...     __metaclass__ = MC
@@ -115,8 +143,11 @@ Now redefine the classes
     >>> class Ellipse(Circle):
     ...     pass
 
+
 In action
 =========
+
+::
 
     >>> c1, c2 = Circle(), Circle()
     >>> c1 in Circle.instances
@@ -127,117 +158,129 @@ In action
     >>> e1 in Circle.instances
     False
 
-Add a __contains__ method to MC
-===============================
 
-    >>> class MC(type):
-    ...         def __init__(cls, name, bases, d):
-    ...             super(MC, cls).__init__(name, bases, d)
-    ...         cls.instances = []
-    ... 
-    >>>     def __contains__(cls, item):
-    ...             return item in cls.instances
-
-
-Now membership is simpler
+Add a __contains__ method
 =========================
 
-    >>> c1 in Circle
+This would be prettier::
+
+    c1 in Circle
+
+This ain't gonna work::
+
+    >>> class C(object):
+    ...     instances = []
+    ...     def __init__(self):
+    ...         self.instances.append(self)
+    ...     @classmethod
+    ...     def __contains__(cls, item):
+    ...         return item in cls.instances
+    ... 
+    >>> c1 = C()
+    >>> c1 in C
+    Traceback (most recent call last):
+    ...
+    TypeError: argument of type 'type' is not iterable
+
+
+Add __contains__ to the metaclass
+=================================
+
+::
+
+    >>> class MC2(type):
+    ...     def __init__(cls, name, bases, d):
+    ...         super(MC2, cls).__init__(name, bases, d)
+    ...         cls.instances = []
+    ...     def __contains__(cls, item):
+    ...             return item in cls.instances
+
+Demonstration
+=============
+
+::
+
+    >>> class C(object):
+    ...     __metaclass__ = MC2
+    ...     def __init__(self):
+    ...         self.instances.append(self)
+    ... 
+    >>> c1 = C()
+    >>> c1 in C # Uses MC2's __contains__ method
     True
+
 
 Cookie cutters 
 ==============
 
-Cookie cutters make cookies.  If you alter the cookie cutter, you alter the
-cookie that it makes.  
+Cookie cutters make cookies.  Round cutters make round
+cookies and square cutters make square cookies.
 
-Big metal presses make cookie cutters.  An altered press makes an altered
-cookie cutter, which then makes an altered cookie.
+Big metal machine presses make cookie cutters.  An altered
+press makes an altered cookie cutter, which then makes an
+altered cookie.
 
-What's the point
-================
-
-Never mind the theory.  Metaclasses are just useful ways of minimizing
-boilerplate code, just like for loops.
 
 Subclasses vs instances
 =======================
 
-    ========== ========== ========
-    metaclass  class      instance 
-    ========== ========== ========
-    type       object     ...
-    MC         Shape      s1
-    MC         Circle     c1
-    MC2        Ellipsis
+    ============= ======= ========
+    metaclass     class   instance 
+    ============= ======= ========
+    type          object  ...
+    MC            C       c1
     ========== ========== ========
 
-Shape has a different metaclass (MC) than object.  Shape's metaclass must be a
-subclass of object's metaclass.
 
-Django's ORM
-============
+Since C subclasses object, C's metaclass must be the same as
+object's metaclass OR C's metaclass must be a subclass of
+object's metaclass.
 
-    from django.db import models
 
-    class Employee(models.Model):
-        login = models.TextField()
-        display_name = models.TextField()
-
-    class Department(models.Model):
-        name = models.TextField()
-        employees = models.ManyToManyField(Employee)
-
-Just based on the definition above, the employees attribute on the
-Department class doesn't have a reference to the Department class.
-
-The metaclass handles that part.
-
-In action
-=========
-
-    $ python manage.py shell
-    In [1]: from scratch.models import Employee, \
-    ...     Department
-    In [2]: homer = Employee(login="hs",
-    ...:                     display_name="H. Simpson")
-    In [3]: sector7G = Department(name="Sector 7G")
-    In [4]: homer.save()
-    In [5]: sector7G.save()
-    In [6]: sector7G.employees.all()
-    Out[6]: []
-    In [7]: sector7G.employees.add(homer)
-    In [8]: sector7G.employees.all()
-    Out[8]: [<Employee: Employee object>]
-    In [9]: _8[0].display_name
-    Out[9]: u'H. Simpson'
-
-Where is the magic?
+__new__ vs __init__
 ===================
 
-Line 8 shows all employees working in sector 7-G.  That query requires
-the department ID for sector 7-G, but the employees attribute has no
-obvious reference to the instance it belongs to, so how does it get that
-ID?
+__new__ has to make the class and then return it.  __init__
+just has to dress it up.  
 
-How does it do that?
-====================
+You can use __new__ to prevent a class to be defined or even
+replace it with another class.
 
-1.  The Employee and Department class both descend from
-    django.db.models.Model, which has a metaclass named ModelBase.
 
-2.  The models.ManyToManyField class has a method called
-    "contribute_to_class".
+Verify an interface
+===================
 
-3.  When Department is instantiated, the ModelBase __new__ method
-    executes.  It iterates through all the attributes of Department.
-    The metaclass checks each attribute of Department and checks each
-    attribute for the existence of a contribute_to_class method.
+Use a metaclass to check that a class class defines all
+expected methods.  If not, the __new__ method will replace
+the class with a Null class::
 
-4.  When it finds contribute_to_class, it calls that method and passes
-    in a pointer to Department class and the name 'employees'.  So in
-    this case, the employees attribute on the Department class has a
-    pointer back to the Department class named 'employees'.
+    >>> from listing2 import InterfaceChecker
+    >>> rocketship = ['launch'] # this is my interface
+    >>> class Soyuz(object):
+    ...     __metaclass__ = InterfaceChecker
+    ...     interface = rocketship
+    ...
+    >>> s1 = Soyuz()
+    >>> type(s1)
+    <class 'listing2.Null'>
+
+
+The metaclass responsible
+=========================
+
+::
+
+    class InterfaceChecker(type):
+
+        def __new__(mcl, name, bases, d):
+            for required_method in d['interface']:
+                try:
+                    d[required_method]
+                except KeyError:
+                    return Null
+
+            return super(InterfaceChecker1, mcl).\
+            __new__(mcl, name, bases, d)
 
 
 Introducing Crude ORM
@@ -245,10 +288,33 @@ Introducing Crude ORM
 
 First we'll model these relationships:
         
-- Each department has many employees.
-- Each employee belongs to exactly one department.
+*   Each department has many employees.
+*   Each employee belongs to exactly one department.
+
+My ORM just returns SQL strings.
+
+
+Example usage
+=============
+
+::
+
+    >>> from listing4 import *
+    >>> produce = Department("Produce")
+    >>> matt = Employee("Matt", produce)
+    >>> produce._id
+    1
+    >>> produce.employees
+    'select * from employee where department_id = 1'
+
+How does the employees attribute know that produce has an
+_id of 1?
+
+
+The Employee and Department classes
+===================================
         
-This code does the job:
+::
 
     >>> from listing4 import *
     >>> class Employee(CrudeTable):
@@ -265,11 +331,12 @@ This code does the job:
     ...         self.name = name
     ...         
     ...     employees = OneToMany(Employee)
-    Assigning the colname to department on attribute employees of cls
-    Department
+
 
 The CrudeTable class
 ====================
+
+::
 
     class CrudeTable(object):
         __metaclass__ = MC
@@ -277,8 +344,11 @@ The CrudeTable class
         def __init__(self):
             self._id = self.id_ticker.next()
 
+
 And the MC metaclass
 ====================
+
+::
 
     class MC(type):
 
@@ -291,31 +361,13 @@ And the MC metaclass
             for attrname, attr in d.iteritems():
 
                 if hasattr(attr, 'colname'):
-                    print ("Assigning the colname to %s on attribute %s of cls %s"
-                           % (cls.sqltablename, attrname, name))
                     attr.colname = cls.sqltablename
                     setattr(cls, attrname, property(attr.query))
 
                 if hasattr(attr, 'jointable'):
-                    attr.jointable = ("%s_%s" 
-                        % (attr.table.sqltablename, cls.sqltablename))
+                    attr.jointable = "%s_%s"  \
+                    % (attr.table.sqltablename, cls.sqltablename))
 
-Example usage
-=============
-
-    >>> produce = Department("Produce")
-    >>> matt = Employee("Matt", produce)
-    >>> produce._id
-    1
-    >>> produce.employees
-    'select * from employee where department_id = 1'
-    >>> bakery = Department("Bakery")
-    >>> lindsey = Employee("Lindsey", bakery)
-    >>> charlie = Employee("Charlie", bakery)
-    >>> bakery._id
-    2
-    >>> bakery.employees
-    'select * from employee where department_id = 2'
 
 How it works
 ============
@@ -326,9 +378,9 @@ Need three things to get all employees in a department:
 * the column name to test (department_id)
 * the value to test for (1 in this case).
 
-By making employees.query into a property named employees, I'm taking
-advantage of the fact that employees will get called with self as the
-first parameter.
+By making employees.query into a property named employees,
+I'm taking advantage of the fact that employees will get
+called with self as the first parameter.
 
 
 Many-to-many
@@ -337,40 +389,46 @@ Many-to-many
 - Each shift requires many employees.
 - Each employee works many different shifts.
 
+
 Example usage
 =============
 
->>> class Shift(CrudeTable):
-...
-...     def __init__(self, name):
-...         super(Shift, self).__init__()
-...         self.name = name
-...
-...     employees = ManyToMany(Employee)
-...
-Assigning the colname to shift on attribute employees of cls Shift
->>> wednesday_night = Shift("Wednesday Night")
->>> print wednesday_night.employees
-select * from employee, employee_shift
-where employee.id = employee_shift.employee_id
-and employee_shift.shift_id = 1
+::
+
+    >>> class Shift(CrudeTable):
+    ...
+    ...     def __init__(self, name):
+    ...         super(Shift, self).__init__()
+    ...         self.name = name
+    ...
+    ...     employees = ManyToMany(Employee)
+    ...
+    >>> wednesday_night = Shift("Wednesday Night")
+    >>> print wednesday_night.employees
+    select * from employee, employee_shift
+    where employee.id = employee_shift.employee_id
+    and employee_shift.shift_id = 1
+
 
 Explained
 =========
 
-The ManyToMany class also needs the name of the table joining the two
-other tables.  The MC metaclass watches for attributes with a jointable
-attribute, and it fills that in when it finds it.
+The ManyToMany class also needs the name of the table
+joining the two other tables.  The MC metaclass watches for
+attributes with a jointable attribute, and it fills that in
+when it finds it.
 
-Cleverness reconsidered
-=======================
+
+Cleverness re-reconsidered
+==========================
 
 This shows up a lot::
 
-    Metaclasses are deeper magic than 99% of users should ever worry
-    about. If you wonder whether you need them, you don't (the people
-    who actually need them know with certainty that they need them, and
-    don't need an explanation about why). -- Python Guru Tim Peters
+    Metaclasses are deeper magic than 99% of users should
+    ever worry about. If you wonder whether you need them,
+    you don't (the people who actually need them know with
+    certainty that they need them, and don't need an
+    explanation about why). -- Python Guru Tim Peters
 
 
 Metaclasses vs class decorators
@@ -387,12 +445,128 @@ The camel-case aliasing example is easy::
     ...
     >>> @aliasmaker
     ... class C(object):
-    ...
+    ...     def splitLog(self, x):
+    ...         pass
 
 But...
 ======
 
 *   Decorating a class doesn't decorate subclasses
 
-*   That __contains__ trick isn't possible, because that has to be defined on
-    the metaclass.
+*   That __contains__ trick isn't possible, because that has
+    to be defined on the metaclass.
+
+
+Prototypes are the real anti-metaclass
+======================================
+
+*   When you ask an object for an attribute or a method it
+    doesn't have, it will ask its prototype for it.  
+    
+*   If the prototype doesn't have it, it will ask its
+    prototype.
+
+*   The chain continues until somebody knows what to do or
+    we run out of prototypes.
+
+
+Trivial javascript example
+==========================
+
+::
+
+    js> var O = function () {
+        this.a = 1;
+        this.b = 2;
+    };
+    js> var o = new O();
+    js> o.a
+    1
+    js> o.c == null
+    true
+
+Define a prototype for O
+========================
+
+::
+
+    js> var P = function () {
+        this.c = 3;
+    };
+    js> var Q = function () {
+        this.d = 4;
+    };
+    js> P.prototype = new Q();
+    [object Object]
+    js> O.prototype = new P();
+    [object Object]
+
+Now failed lookups on O will go to P, and then to Q.
+
+In action
+=========
+
+::
+
+    js> var o = new O();
+    js> o.a
+    1
+    js> o.c // from P.
+    3
+    js> o.d // from Q.
+    4
+
+
+Now change stuff at runtime
+===========================
+
+::
+
+    js> O.prototype = new function () {this.c = 99}()
+    [object Object]
+    js> var o2 = new O();
+    js> o2.c
+    99
+    js> o.c
+    3
+
+
+Stuff to keep in mind
+=====================
+
+*   Forget all about instantiation and subclassing and just
+    think about cloning.  After you clone something,
+    trashing the original doesn't affect the clone.
+
+*   Classes are really just linked lists of lookup tables
+    now, and you can monkey with them at runtime.
+
+
+Trivial Python implementation
+=============================
+
+::
+
+    >>> class ProtoC(object):
+    ...     def __getattr__(self, k):
+    ...         if self.prototype:
+    ...             return getattr(self.prototype, k)
+    ...     def __init__(self, **kwargs):
+    ...         self.prototype = None
+    ...         self.__dict__.update(**kwargs)
+    ... 
+    >>> c1 = ProtoC(a=1, b=2)
+    >>> c2 = ProtoC(prototype=c1)
+    >>> c2.a
+    1
+    >>> c2.a = 11
+    >>> c1.a, c2.a
+    (1, 11)
+
+Lots more to prototypes
+=======================
+
+*   Every object should have a clone method.
+
+*   Should be easy to add methods that reference self at
+    runtime.

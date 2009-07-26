@@ -82,12 +82,12 @@ class peace_between_factions(type):
         print "cls is %s" % cls
         print "name is %s" % name
         print "bases are %s" % bases
-        print "d is %s" % d
+        # print "d is %s" % d
 
         # Iterate through each attribute in the class.
 
         for attrname, attr in d.items():
 
             # For methods, create an alias.
-            if type(attr) == types.MethodType:
+            if type(attr) in (types.FunctionType, types.MethodType):
                 setattr(cls, mk_alias(attrname), attr)

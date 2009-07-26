@@ -1,66 +1,28 @@
-# listing2.py
-
 """
-Vastly simplified example of ORM metaclass trickery.
+Verify a class implements an interface.
+Otherwise return a Null object in its place.
 """
 
-from itertools import count
+class Null(object):
+    def __init__(self, *args, **kwargs): pass
+    def __call__(self, *args, **kwargs): pass
+    def __repr__(self): return "Null()"
+    def __nonzero__(self): return False
+    def __getattr__(self, name): return self
+    def __setattr__(self, name, value): return self
+    def __delattr__(self, name): return self
 
-class ManyToMany(object):
+class InterfaceChecker(type):
+    """
+    Verifies all required methods are defined or returns Null class in place
+    of original class.
+    """
 
-    def __init__(self, table):
-        self.table = table
-        self.jointable = None
-        self.colname = '%s_id' % table.sqltablename
+    def __new__(mcl, name, bases, d):
+        for required_method in d['interface']:
+            try:
+                d[required_method]
+            except KeyError:
+                return Null
+        return super(InterfaceChecker1, mcl).__new__(mcl, name, bases, d)
 
-    def query(self, x):
-
-        d = dict(table=self.table.sqltablename,
-                 jointable=self.jointable,
-                 colname=self.colname,
-                 colvalue=x._id)
-
-        return ("select * from %(table)s, %(jointable)s\n"
-                "where %(table)s.id = %(jointable)s.%(table)s_id\n"
-                "and %(jointable)s.%(colname)s_id = %(colvalue)s"
-                % d)
-
-class OneToMany(object):
-
-    def __init__(self, table):
-        self.table = table
-        self.colname = None # The metaclass adds this.
-
-    def query(self, x):
-
-        """
-        Returns a string like "select * from employee where department_id = 99"
-        x must have an _id attribute.
-        """
-
-        return ("select * from %s where %s_id = %s" 
-                % (self.table.sqltablename, self.colname, x._id))
-
-class MC(type):
-
-    def __init__(cls, name, bases, d):
-        super(MC, cls).__init__(name, bases, d)
-        
-        cls.sqltablename = name.lower()
-        cls.id_ticker = count(1) # This is our fake PK.
-
-        for attrname, attr in d.iteritems():
-
-            if hasattr(attr, 'colname'):
-                print ("Assigning colname to %s on attribute %s of cls %s" 
-                       % (cls.sqltablename, attrname, name))
-                attr.colname = cls.sqltablename
-
-            if hasattr(attr, 'jointable'):
-                attr.jointable = "%s_%s" % (attr.table.sqltablename, cls.sqltablename)
-            
-class CrudeTable(object):
-    __metaclass__ = MC
-
-    def __init__(self):
-        self._id = self.id_ticker.next()
