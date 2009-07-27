@@ -1,8 +1,7 @@
-==========================+
+===========================
 Clever Uses for Metaclasses
-==========================+
+===========================
 
-**slides are for MBAs**
 
 Really simple metaclass example
 ===============================
@@ -12,6 +11,7 @@ Programmers fight about camelCase (boo!) versus under_score
 
 So I made a metaclass that creates aliases from each
 convention to the other.
+
 
 In use
 ======
@@ -30,6 +30,7 @@ In use
     >>> c1 = C()
     >>> id(c1.split_log) == id(c1.splitLog)
     True
+
 
 The code
 ========
@@ -224,12 +225,12 @@ altered cookie.
 Subclasses vs instances
 =======================
 
-    ============= ======= ========
-    metaclass     class   instance 
-    ============= ======= ========
-    type          object  ...
-    MC            C       c1
-    ========== ========== ========
+    =============== ======= ===========
+    metaclass       class   instance 
+    =============== ======= ===========
+    type            object    ...
+    MC              C         c1
+    =============== ======= ===========
 
 
 Since C subclasses object, C's metaclass must be the same as
